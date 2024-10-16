@@ -497,3 +497,164 @@ resource "aws_instance" "app_server" {
     ignore_changes = [tags]
   }
 }
+Even though changes are done terraform is not applying
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+13. VPC Creation
+------------------
+
+# Provider configuration
+provider "aws" {
+  region = "ap-south-1"  # Changed to ap-south-1 (Mumbai region)
+}
+
+# VPC creation
+resource "aws_vpc" "deepak_vpc" {
+  cidr_block           = "10.0.0.0/24"  # VPC CIDR block
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags = {
+    Name = "deepak-vpc"
+  }
+}
+
+# Public Subnet 1
+resource "aws_subnet" "public_subnet_1" {
+  vpc_id            = aws_vpc.deepak_vpc.id
+  cidr_block        = "10.0.0.0/26"    # First public subnet CIDR
+  map_public_ip_on_launch = true       # create public ip
+  availability_zone = "ap-south-1a"    # First availability zone
+  
+  tags = {
+    Name = "deepak-public-subnet-1"
+  }
+}
+
+# Public Subnet 2
+resource "aws_subnet" "public_subnet_2" {
+  vpc_id            = aws_vpc.deepak_vpc.id
+  cidr_block        = "10.0.0.64/26"   # Second public subnet CIDR
+  map_public_ip_on_launch = true       # # create public ip
+  availability_zone = "ap-south-1b"    # Second availability zone
+  
+  tags = {
+    Name = "deepak-public-subnet-2"
+  }
+}
+
+# Private Subnet 1
+resource "aws_subnet" "private_subnet_1" {
+  vpc_id            = aws_vpc.deepak_vpc.id
+  cidr_block        = "10.0.0.128/26"  # First private subnet CIDR
+  availability_zone = "ap-south-1a"    # First availability zone
+  
+  tags = {
+    Name = "deepak-private-subnet-1"
+  }
+}
+
+# Private Subnet 2
+resource "aws_subnet" "private_subnet_2" {
+  vpc_id            = aws_vpc.deepak_vpc.id
+  cidr_block        = "10.0.0.192/26"  # Second private subnet CIDR
+  availability_zone = "ap-south-1b"    # Second availability zone
+  
+  tags = {
+    Name = "deepak-private-subnet-2"
+  }
+}
+
+# Internet Gateway
+resource "aws_internet_gateway" "deepak_igw" {
+  vpc_id = aws_vpc.deepak_vpc.id
+  
+  tags = {
+    Name = "deepak-internet-gateway"
+  }
+}
+
+# Route Table for Public Subnets
+resource "aws_route_table" "public_route_table" {
+  vpc_id = aws_vpc.deepak_vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.deepak_igw.id
+  }
+
+  tags = {
+    Name = "deepak-public-route-table"
+  }
+}
+
+# Associate Public Subnet 1 with Route Table
+resource "aws_route_table_association" "public_route_association_1" {
+  subnet_id      = aws_subnet.public_subnet_1.id
+  route_table_id = aws_route_table.public_route_table.id
+}
+
+# Associate Public Subnet 2 with Route Table
+resource "aws_route_table_association" "public_route_association_2" {
+  subnet_id      = aws_subnet.public_subnet_2.id
+  route_table_id = aws_route_table.public_route_table.id
+}
+
+# Security Group for EC2 allowing all traffic
+resource "aws_security_group" "deepak_sg" {
+  vpc_id = aws_vpc.deepak_vpc.id
+  
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"      # Allows all traffic (TCP, UDP, ICMP, etc.)
+    cidr_blocks = ["0.0.0.0/0"] # Allow all traffic from anywhere
+  }
+
+
+  /* ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["10.0.0.0/24"]  # Allows all inbound traffic within the VPC CIDR range
+  } */
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "deepak-security-group"
+  }
+}
+
+output "security_group_id" {
+  value = aws_security_group.deepak_sg.id
+}
+
+# EC2 Instance
+
+resource "aws_instance" "deepak_ec2" {
+  ami           = "ami-022ce6f32988af5fa" # Replace with your preferred AMI
+  instance_type = "t2.micro"
+
+  subnet_id              = aws_subnet.public_subnet_1.id # Launch in public subnet 1
+  security_groups        = [aws_security_group.deepak_sg.id] # Use ID instead of name
+  associate_public_ip_address = true
+
+  # Dependency on security group
+   depends_on = [
+    aws_security_group.deepak_sg,
+    aws_subnet.public_subnet_1,
+    aws_subnet.public_subnet_2
+  ]
+
+  tags = {
+    Name = "deepak-ec2"
+  }
+}
+
+
